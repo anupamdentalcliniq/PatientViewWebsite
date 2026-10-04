@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New Patient Registration — Anupam Dental Clinic</title>
+<style>
+  :root {
+    --bg: #ffffff; --surface: #ffffff; --surface-2: #f2f5fb;
+    --ink: #16202f; --ink-soft: #45526b; --muted: #6b7690; --line: #dde3f0;
+    --accent: #1d4aa4; --accent-2: #112b5f; --accent-soft: #e3eafa;
+    --ok: #1a8a5f; --ok-soft: #e5f6ee; --shadow: 0 20px 44px -28px rgba(17,43,95,.32);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Segoe UI", Manrope, -apple-system, sans-serif; padding-inline: 0; }
+  .hdr { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fbf9f2; padding: 1.1rem 1.5rem; text-align: center; position: sticky; top: 0; z-index: 10; }
+  .hdr h1 { font-size: 1.05rem; font-weight: 800; margin: 0; letter-spacing: .01em; }
+  .hdr p { opacity: .9; font-size: .75rem; margin: 3px 0 0; }
+  .wrap { max-width: 620px; margin: 0 auto; padding: 1.25rem; }
+  .card { background: var(--surface); border-radius: 16px; padding: 1.5rem; border: 1px solid var(--line); margin-bottom: 1rem; box-shadow: var(--shadow); }
+  .prog { display: flex; gap: 4px; margin-bottom: 1rem; }
+  .step { flex: 1; height: 5px; border-radius: 3px; background: var(--line); transition: background .2s; }
+  .label { display: block; font-weight: 700; font-size: .85rem; color: var(--ink-soft); margin-bottom: .4rem; }
+  input, select, textarea { width: 100%; padding: .65rem .875rem; border: 1.5px solid var(--line); border-radius: 9px; font-size: .92rem; font-family: inherit; outline: none; background: var(--surface); color: var(--ink); }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 70px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .g2 { grid-column: 1 / -1; }
+  @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } }
+  .btn { display: block; width: 100%; padding: .8rem; border-radius: 10px; font-weight: 700; font-size: 1rem; cursor: pointer; border: none; font-family: inherit; }
+  .btn-p { background: var(--accent); color: #fbf9f2; margin-bottom: .75rem; }
+  .btn-p:disabled { opacity: .6; cursor: default; }
+  .btn-s { background: var(--surface-2); color: var(--ink-soft); }
+  .chk { display: flex; align-items: center; gap: .5rem; padding: .55rem .75rem; border-radius: 9px; cursor: pointer; border: 1px solid var(--line); margin-bottom: .4rem; user-select: none; }
+  .chk.on { border-color: var(--accent); background: var(--accent-soft); }
+  .con { display: flex; align-items: flex-start; gap: .5rem; padding: .6rem .75rem; border-radius: 9px; cursor: pointer; border: 1px solid var(--line); margin-bottom: .4rem; user-select: none; }
+  .con.on { border-color: var(--ok); background: var(--ok-soft); }
+  canvas { display: block; width: 100%; height: 110px; touch-action: none; cursor: crosshair; }
+  .foot { text-align: center; color: var(--muted); font-size: .72rem; padding-bottom: 2rem; }
+  .hpot { position: absolute; left: -9999px; top: -9999px; }
+  .config-warn {
+    background: #fff4e5; border: 1px solid #f3c98a; color: #7a4a06; font-size: .78rem;
+    padding: .6rem .8rem; border-radius: 9px; margin-bottom: 1rem;
+  }
+</style>
+</head>
+<body>
+<div class="hdr"><h1>ANUPAM DENTAL CLINIC</h1><p>New Patient Registration</p></div>
+<div class="wrap">
+  <div id="config-warn-slot"></div>
+  <div class="card" id="prog-card">
+    <div style="display:flex;justify-content:space-between;margin-bottom:.4rem">
+      <span style="font-weight:700;font-size:.8rem">Step <span id="snum">1</span> of 6:</span>
+      <span style="font-weight:700;font-size:.8rem;color:var(--accent)" id="sname">Personal</span>
+    </div>
+    <div class="prog" id="prog"></div>
+  </div>
+  <div class="card" id="form-card"></div>
+  <div style="display:flex;gap:.875rem;margin-bottom:1.5rem">
+    <button class="btn btn-s" id="prev-btn" onclick="prev()" style="flex:1">Previous</button>
+    <button class="btn btn-p" id="next-btn" onclick="next()" style="flex:2">Next</button>
+  </div>
+  <p class="foot">Anupam Dental Clinic, Madipakkam, Chennai · your details go straight to our front desk and are reviewed before your first visit is confirmed.</p>
+</div>
+<script>
+// ── Point this at your deployed HMS backend once it has a public URL ──
+// e.g. 'https://your-service-xyz.a.run.app'  (Cloud Run) or your Render/VPS URL.
+// Leave as '' while the backend only runs on localhost — the form will still
+// render and validate, but submission is disabled and says so.
+var API_BASE_URL = 'https://hms-app-1088784000347.asia-south1.run.app';
+var INTAKE_ENDPOINT = (API_BASE_URL || '') + '/api/public/patient-intake';
+
+var S = 1, MAX = 6, sig = '', drawing = false, lx = 0, ly = 0, formStartedAt = Date.now();
+var SN = ['Personal', 'Emergency', 'Medical', 'Allergies', 'Lifestyle', 'Consent'];
+var D = { name: '', email: '', phone: '', dob: '', gender: '', blood_group: '', address: '', city: '', pincode: '',
+          emg_name: '', emg_phone: '', emg_rel: '' };
+var med = {}, alg = {}, life = { smoking: false, alcohol: false, tobacco: false }, con = {};
+
+if (!API_BASE_URL) {
+  document.getElementById('config-warn-slot').innerHTML =
+    '<div class="config-warn">This form isn\'t connected to the clinic\'s system yet (backend not deployed publicly). ' +
+    'It will validate normally but submission is disabled until API_BASE_URL is set in the page.</div>';
+}
+
+function render() {
+  document.getElementById('snum').textContent = S;
+  document.getElementById('sname').textContent = SN[S - 1];
+  var p = document.getElementById('prog'); p.innerHTML = '';
+  for (var i = 0; i < MAX; i++) { var d = document.createElement('div'); d.className = 'step'; d.style.background = i < S ? 'var(--accent)' : 'var(--line)'; p.appendChild(d); }
+  document.getElementById('prev-btn').style.display = S === 1 ? 'none' : 'block';
+  document.getElementById('next-btn').textContent = S === MAX ? 'Submit Registration' : 'Next: ' + SN[S];
+  var f = document.getElementById('form-card');
+
+  if (S === 1) f.innerHTML = '<h2 style="font-weight:800;margin:0 0 1rem">Personal Information</h2><div class="grid">' +
+    '<div class="g2"><label class="label">Full Name *</label><input id="f_name" value="' + esc(D.name) + '"></div>' +
+    '<div><label class="label">Date of Birth</label><input type="date" id="f_dob" value="' + esc(D.dob) + '"></div>' +
+    '<div><label class="label">Gender</label><select id="f_gender"><option value="">Select</option><option' + sel(D.gender, 'Male') + '>Male</option><option' + sel(D.gender, 'Female') + '>Female</option><option' + sel(D.gender, 'Other') + '>Other</option></select></div>' +
+    '<div><label class="label">Blood Group</label><select id="f_bg">' + bgOptions(D.blood_group) + '</select></div>' +
+    '<div><label class="label">Phone *</label><input id="f_phone" value="' + esc(D.phone) + '" placeholder="10-digit mobile"></div>' +
+    '<div class="g2"><label class="label">Email</label><input type="email" id="f_email" value="' + esc(D.email) + '"></div>' +
+    '<div class="g2"><label class="label">Address</label><input id="f_addr" value="' + esc(D.address) + '"></div>' +
+    '<div><label class="label">City</label><input id="f_city" value="' + esc(D.city) + '" placeholder="Chennai"></div>' +
+    '<div><label class="label">Pincode</label><input id="f_pin" value="' + esc(D.pincode) + '"></div></div>';
+
+  if (S === 2) f.innerHTML = '<h2 style="font-weight:800;margin:0 0 1rem">Emergency Contact</h2><div style="background:var(--accent-soft);padding:.75rem;border-radius:9px;border:1px solid var(--line);margin-bottom:1rem;font-size:.85rem;color:var(--ink-soft)">Who should we contact in an emergency?</div><div class="grid">' +
+    '<div class="g2"><label class="label">Name *</label><input id="e_name" value="' + esc(D.emg_name) + '"></div>' +
+    '<div><label class="label">Phone *</label><input id="e_phone" value="' + esc(D.emg_phone) + '"></div>' +
+    '<div><label class="label">Relationship</label><select id="e_rel"><option value="">Select</option>' + ['Spouse', 'Parent', 'Child', 'Sibling', 'Friend', 'Other'].map(function (r) { return '<option' + sel(D.emg_rel, r) + '>' + r + '</option>'; }).join('') + '</select></div></div>';
+
+  if (S === 3) { var m = ['diabetes', 'high_bp', 'heart_disease', 'asthma', 'kidney_disease', 'liver_disease', 'thyroid', 'epilepsy', 'none'];
+    var ml = ['Diabetes', 'High Blood Pressure', 'Heart Disease', 'Asthma', 'Kidney Disease', 'Liver Disease', 'Thyroid', 'Epilepsy', 'None of the above'];
+    f.innerHTML = '<h2 style="font-weight:800;margin:0 0 1rem">Medical History</h2><p style="color:var(--muted);font-size:.85rem;margin:0 0 1rem">Check all that apply:</p><div class="grid">' +
+      m.map(function (k, i) { return '<div class="chk' + (med[k] ? ' on' : '') + '" onclick="tm(\'' + k + '\')"><input type="checkbox" readonly' + (med[k] ? ' checked' : '') + '>' + ml[i] + '</div>'; }).join('') + '</div>'; }
+
+  if (S === 4) { var ak = ['penicillin', 'latex', 'aspirin', 'anaesthesia', 'none']; var al = ['Penicillin', 'Latex', 'Aspirin', 'Local Anaesthesia', 'None of the above'];
+    f.innerHTML = '<h2 style="font-weight:800;margin:0 0 1rem">Allergies &amp; Medications</h2><p style="font-weight:700;color:var(--accent);margin:0 0 .75rem">Known Allergies:</p><div class="grid">' +
+      ak.map(function (k, i) { return '<div class="chk' + (alg[k] ? ' on' : '') + '" onclick="ta(\'' + k + '\')"><input type="checkbox" readonly' + (alg[k] ? ' checked' : '') + '>' + al[i] + '</div>'; }).join('') + '</div>' +
+      '<div style="margin-top:.75rem"><label class="label">Other allergies</label><input id="a_other" value="' + esc(alg.other || '') + '"></div>' +
+      '<div style="margin-top:1rem"><label class="label" style="color:var(--accent)">Current Medications</label><textarea id="a_meds">' + esc(alg.meds || '') + '</textarea></div>'; }
+
+  if (S === 5) { var lk = ['smoking', 'alcohol', 'tobacco', 'teetotaler']; var ll = ['Smoking', 'Alcohol Consumption', 'Tobacco Use', 'Teetotaler'];
+    f.innerHTML = '<h2 style="font-weight:800;margin:0 0 1rem">Lifestyle</h2>' +
+      lk.map(function (k, i) { return '<div class="chk' + (life[k] ? ' on' : '') + '" onclick="tl(\'' + k + '\')"><input type="checkbox" readonly' + (life[k] ? ' checked' : '') + '>' + ll[i] + '</div>'; }).join(''); }
+
+  if (S === 6) { var ck = ['treatment', 'emergency', 'xray', 'photography', 'privacy', 'payment', 'sms'];
+    var cl = ['I consent to dental treatment as recommended', 'I authorize emergency treatment if needed', 'I authorize X-rays and diagnostics', 'I consent to clinical photography for records', 'I agree to the Privacy Policy', 'I agree to the payment policy', 'I consent to SMS/Email/WhatsApp reminders'];
+    f.innerHTML = '<h2 style="font-weight:800;margin:0 0 .5rem">Consent</h2><p style="background:var(--accent-soft);padding:.75rem;border-radius:9px;border:1px solid var(--line);font-size:.8rem;color:var(--ink-soft);margin:0 0 1rem">Please check every item below to complete registration.</p>' +
+      ck.map(function (k, i) { return '<div class="con' + (con[k] ? ' on' : '') + '" onclick="tc(\'' + k + '\')"><input type="checkbox" readonly style="flex-shrink:0;margin-top:2px"' + (con[k] ? ' checked' : '') + '> <span style="font-size:.82rem">' + cl[i] + '</span></div>'; }).join('') +
+      '<div style="margin-top:1.25rem"><label class="label" style="color:var(--accent)">Digital Signature <span style="font-weight:400;font-size:.75rem;color:var(--muted)">(draw below)</span></label>' +
+      '<div style="border:2px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface-2);position:relative">' +
+      '<canvas id="sig-canvas" width="560" height="110"></canvas>' +
+      '<div id="sig-hint" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--muted);font-size:.85rem;pointer-events:none">Draw signature</div></div>' +
+      '<div style="display:flex;justify-content:space-between;margin-top:6px"><span style="font-size:.72rem;color:var(--muted)">Date: ' + new Date().toLocaleDateString('en-IN') + '</span>' +
+      '<button type="button" onclick="clrSig()" style="padding:.25rem .75rem;background:#fdeaea;border:none;border-radius:6px;cursor:pointer;color:#b3261e;font-weight:600;font-size:.78rem">Clear</button></div>' +
+      (sig ? '<p style="color:var(--ok);font-weight:600;font-size:.8rem;margin-top:4px">Signature captured</p>' : '') +
+      '<input class="hpot" id="f_company" name="company" tabindex="-1" autocomplete="off">'; }
+  initCanvas();
+}
+function esc(v) { return (v || '').replace(/"/g, '&quot;'); }
+function sel(cur, val) { return cur === val ? ' selected' : ''; }
+function bgOptions(cur) { var groups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']; return '<option value="">Select</option>' + groups.map(function (g) { return '<option' + sel(cur, g) + '>' + g + '</option>'; }).join(''); }
+function tm(k) { med[k] = !med[k]; render(); }
+function ta(k) { alg[k] = !alg[k]; render(); }
+function tl(k) { life[k] = !life[k]; render(); }
+function tc(k) { con[k] = !con[k]; render(); }
+function v(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+function collect() {
+  if (S === 1) { D.name = v('f_name'); D.dob = v('f_dob'); D.gender = v('f_gender'); D.blood_group = v('f_bg'); D.phone = v('f_phone'); D.email = v('f_email'); D.address = v('f_addr'); D.city = v('f_city'); D.pincode = v('f_pin'); }
+  if (S === 2) { D.emg_name = v('e_name'); D.emg_phone = v('e_phone'); D.emg_rel = v('e_rel'); }
+  if (S === 4) { alg.other = v('a_other'); alg.meds = v('a_meds'); }
+}
+function next() {
+  collect();
+  if (S === 1 && (!D.name.trim() || !D.phone.trim())) { alert('Name and phone number are required.'); return; }
+  if (S === 2 && (!D.emg_name.trim() || !D.emg_phone.trim())) { alert('Emergency contact name and phone are required.'); return; }
+  if (S < MAX) { S++; render(); } else { submit(); }
+}
+function prev() { collect(); if (S > 1) { S--; render(); } }
+function initCanvas() {
+  var c = document.getElementById('sig-canvas'); if (!c) return;
+  c.onmousedown = function (e) { drawing = true; var r = c.getBoundingClientRect(); lx = e.clientX - r.left; ly = e.clientY - r.top; };
+  c.onmousemove = function (e) { if (!drawing) return; var r = c.getBoundingClientRect(); draw(e.clientX - r.left, e.clientY - r.top); };
+  c.onmouseup = c.onmouseleave = function () { if (drawing) { drawing = false; sig = c.toDataURL(); } };
+  c.ontouchstart = function (e) { e.preventDefault(); drawing = true; var r = c.getBoundingClientRect(); lx = e.touches[0].clientX - r.left; ly = e.touches[0].clientY - r.top; };
+  c.ontouchmove = function (e) { e.preventDefault(); if (!drawing) return; var r = c.getBoundingClientRect(); draw(e.touches[0].clientX - r.left, e.touches[0].clientY - r.top); };
+  c.ontouchend = function () { if (drawing) { drawing = false; sig = c.toDataURL(); } };
+}
+function draw(x, y) { var c = document.getElementById('sig-canvas'); if (!c) return; var ctx = c.getContext('2d'); ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(x, y); ctx.strokeStyle = '#16202f'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.stroke(); lx = x; ly = y; var h = document.getElementById('sig-hint'); if (h) h.style.display = 'none'; }
+function clrSig() { var c = document.getElementById('sig-canvas'); if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height); sig = ''; var h = document.getElementById('sig-hint'); if (h) h.style.display = 'block'; }
+
+function submit() {
+  var ck = ['treatment', 'emergency', 'xray', 'photography', 'privacy', 'payment', 'sms'];
+  if (!ck.every(function (k) { return con[k]; })) { alert('Please check all consent items.'); return; }
+  if (!sig) { alert('Please draw your signature.'); return; }
+  // Honeypot + minimum fill-time check — silent client-side spam guard; the
+  // real enforcement should also happen server-side (see backend notes).
+  if (v('f_company')) { showDone(); return; } // bot filled the hidden field — pretend success, drop silently
+  if (Date.now() - formStartedAt < 3000) { alert('Please review your details before submitting.'); return; }
+
+  if (!API_BASE_URL) {
+    alert('This form is not yet connected to the clinic\'s system. Please call the clinic directly for now.');
+    return;
+  }
+
+  var btn = document.getElementById('next-btn'); btn.disabled = true; btn.textContent = 'Submitting…';
+  var payload = {
+    name: D.name, email: D.email, phone: D.phone, date_of_birth: D.dob, gender: D.gender, blood_group: D.blood_group,
+    address: D.address, city: D.city, pincode: D.pincode,
+    emergency_contact_name: D.emg_name, emergency_contact_phone: D.emg_phone, emergency_contact_relation: D.emg_rel,
+    medical_conditions: Object.keys(med).filter(function (k) { return med[k]; }).join(', '),
+    allergies: Object.keys(alg).filter(function (k) { return typeof alg[k] === 'boolean' && alg[k]; }).join(', '),
+    allergy_other: alg.other || '', medications: alg.meds || '',
+    smoking: life.smoking ? 'Yes' : 'No', alcohol: life.alcohol ? 'Yes' : 'No', tobacco: life.tobacco ? 'Yes' : 'No',
+    consent_all: 'YES', consent_date: new Date().toLocaleDateString('en-IN'),
+    signature_data: sig, source: 'website_public_form',
+  };
+  fetch(INTAKE_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(function (r) { return r.json(); })
+    .then(function (res) { if (res && res.success) { showDone(); } else { throw new Error((res && res.error) || 'Submission failed'); } })
+    .catch(function (err) { btn.disabled = false; btn.textContent = 'Submit Registration'; alert('Something went wrong: ' + err.message + '\nPlease try again or call the clinic.'); });
+}
+function showDone() {
+  document.body.innerHTML = '<div style="min-height:100vh;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;padding:1rem">' +
+    '<div style="background:#fff;border-radius:20px;padding:3rem 2.25rem;text-align:center;max-width:460px">' +
+    '<div style="font-size:3rem;margin-bottom:1rem">✅</div>' +
+    '<h2 style="font-weight:800;color:#1a8a5f;margin:0 0 .5rem">Thank you!</h2>' +
+    '<p style="color:#334155;margin:0 0 1rem">Your registration has been received. Our front desk will review it and confirm your appointment by phone or WhatsApp.</p>' +
+    '<p style="color:#1d4aa4;font-weight:700;margin:0">Anupam Dental Clinic<br><span style="font-weight:400;color:#64748b;font-size:.85rem">Madipakkam, Chennai</span></p></div></div>';
+}
+render();
+</script>
+</body>
+</html>
